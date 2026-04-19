@@ -8,6 +8,7 @@ import GalaxyView from './components/GalaxyView'
 import GraphView from './components/GraphView'
 import CommandPalette from './components/CommandPalette'
 import ImportModal from './components/ImportModal'
+import ErrorBoundary from './components/ErrorBoundary'
 import type { Session } from '@supabase/supabase-js'
 
 export default function App() {
@@ -48,70 +49,65 @@ export default function App() {
   if (!session) return <AuthScreen />
 
   return (
-    <div className="flex h-full w-full overflow-hidden" style={{ background: '#0d0d0f' }}>
-      <PanelGroup direction="horizontal">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <>
-            <Panel defaultSize={18} minSize={12} maxSize={30}>
-              <div className="h-full flex flex-col">
-                {/* Import button */}
-                <div className="px-2 pt-2 flex-shrink-0">
+    <ErrorBoundary>
+      <div className="flex w-full overflow-hidden" style={{ background: '#0d0d0f', height: '100dvh' }}>
+        <PanelGroup direction="horizontal" style={{ height: '100%' }}>
+          {/* Sidebar */}
+          {sidebarOpen && (
+            <>
+              <Panel defaultSize={18} minSize={12} maxSize={30}>
+                <div className="h-full flex flex-col">
+                  <div className="px-2 pt-2 flex-shrink-0">
+                    <button
+                      className="w-full text-xs py-1.5 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
+                      onClick={() => setShowImport(true)}
+                    >
+                      ↓ Import Obsidian Vault
+                    </button>
+                  </div>
+                  <Sidebar />
+                </div>
+              </Panel>
+              <PanelResizeHandle className="w-px hover:w-0.5 transition-all" style={{ background: '#2a2a35' }} />
+            </>
+          )}
+
+          {/* Main content */}
+          <Panel>
+            <div className="h-full flex flex-col">
+              {/* Toolbar */}
+              <div
+                className="flex items-center gap-2 px-4 h-10 flex-shrink-0 border-b border-border-subtle"
+                style={{ background: '#141416' }}
+              >
+                <ViewToggle />
+                <div className="ml-auto flex items-center gap-2">
                   <button
-                    className="w-full text-xs py-1.5 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
-                    onClick={() => setShowImport(true)}
+                    className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+                    onClick={() => setCommandPaletteOpen(true)}
                   >
-                    ↓ Import Obsidian Vault
+                    ⌕ Search
                   </button>
                 </div>
-                <Sidebar />
               </div>
-            </Panel>
-            <PanelResizeHandle className="w-px hover:w-0.5 transition-all" style={{ background: '#2a2a35' }} />
-          </>
-        )}
 
-        {/* Main content */}
-        <Panel>
-          <div className="h-full flex flex-col">
-            {/* Toolbar */}
-            <div
-              className="flex items-center gap-2 px-4 h-10 flex-shrink-0 border-b border-border-subtle"
-              style={{ background: '#141416' }}
-            >
-              <ViewToggle />
-              <div className="ml-auto flex items-center gap-2">
-                <button
-                  className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-                  onClick={() => setCommandPaletteOpen(true)}
-                >
-                  ⌕ Search
-                  <kbd className="ml-2 opacity-50">⌘P</kbd>
-                </button>
+              <div className="flex-1 min-h-0 overflow-hidden">
+                {mainView === 'editor' && (
+                  activeNoteId
+                    ? <div className="h-full overflow-auto"><Editor noteId={activeNoteId} /></div>
+                    : <EmptyState />
+                )}
+                {mainView === 'galaxy' && <GalaxyView />}
+                {mainView === 'graph' && <GraphView />}
               </div>
             </div>
+          </Panel>
+        </PanelGroup>
 
-            <div className="flex-1 overflow-hidden min-h-0">
-              <PanelGroup direction="horizontal">
-                <Panel>
-                  {mainView === 'editor' && (
-                    activeNoteId
-                      ? <div className="h-full overflow-auto"><Editor noteId={activeNoteId} /></div>
-                      : <EmptyState />
-                  )}
-                  {mainView === 'galaxy' && <GalaxyView />}
-                  {mainView === 'graph' && <GraphView />}
-                </Panel>
-
-              </PanelGroup>
-            </div>
-          </div>
-        </Panel>
-      </PanelGroup>
-
-      {commandPaletteOpen && <CommandPalette />}
-      {showImport && <ImportModal onClose={() => setShowImport(false)} />}
-    </div>
+        {commandPaletteOpen && <CommandPalette />}
+        {showImport && <ImportModal onClose={() => setShowImport(false)} />}
+      </div>
+    </ErrorBoundary>
   )
 }
 
