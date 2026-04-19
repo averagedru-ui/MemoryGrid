@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore'
 export default function CommandPalette() {
   const [query, setQuery] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
-  const { notes, setActiveNote, setCommandPaletteOpen, createNote, setMainView, setClaudeOpen } = useStore()
+  const { notes, setActiveNote, setCommandPaletteOpen, createNote, setMainView } = useStore()
 
   useEffect(() => {
     inputRef.current?.focus()
@@ -14,7 +14,6 @@ export default function CommandPalette() {
     { label: 'New note', icon: '+', action: () => { createNote('Untitled'); setCommandPaletteOpen(false) } },
     { label: 'Switch to Galaxy view', icon: '✦', action: () => { setMainView('galaxy'); setCommandPaletteOpen(false) } },
     { label: 'Switch to Graph view', icon: '◎', action: () => { setMainView('graph'); setCommandPaletteOpen(false) } },
-    { label: 'Open Claude AI', icon: '◈', action: () => { setClaudeOpen(true); setCommandPaletteOpen(false) } },
     { label: "Today's daily note", icon: '◷', action: () => {
       const today = new Date().toISOString().slice(0, 10)
       const existing = notes.find((n) => n.title === today)

@@ -14,7 +14,6 @@ interface AppState {
   sidebarView: SidebarView
   mainView: MainView
   sidebarOpen: boolean
-  claudeOpen: boolean
   commandPaletteOpen: boolean
 
   // Derived
@@ -31,7 +30,6 @@ interface AppState {
   setSidebarView: (view: SidebarView) => void
   setMainView: (view: MainView) => void
   setSidebarOpen: (open: boolean) => void
-  setClaudeOpen: (open: boolean) => void
   setCommandPaletteOpen: (open: boolean) => void
   computeLinks: () => void
 }
@@ -44,7 +42,6 @@ export const useStore = create<AppState>((set, get) => ({
   sidebarView: 'files',
   mainView: 'editor',
   sidebarOpen: true,
-  claudeOpen: false,
   commandPaletteOpen: false,
   links: [],
 
@@ -110,7 +107,6 @@ export const useStore = create<AppState>((set, get) => ({
   setSidebarView: (view) => set({ sidebarView: view }),
   setMainView: (view) => set({ mainView: view }),
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
-  setClaudeOpen: (open) => set({ claudeOpen: open }),
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
   computeLinks: () => {

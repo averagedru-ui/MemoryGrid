@@ -6,7 +6,6 @@ import Sidebar from './components/Sidebar'
 import Editor from './components/Editor'
 import GalaxyView from './components/GalaxyView'
 import GraphView from './components/GraphView'
-import ClaudePanel from './components/ClaudePanel'
 import CommandPalette from './components/CommandPalette'
 import ImportModal from './components/ImportModal'
 import type { Session } from '@supabase/supabase-js'
@@ -17,8 +16,8 @@ export default function App() {
   const [showImport, setShowImport] = useState(false)
 
   const {
-    activeNoteId, mainView, sidebarOpen, claudeOpen, commandPaletteOpen,
-    loadData, setCommandPaletteOpen, setClaudeOpen,
+    activeNoteId, mainView, sidebarOpen, commandPaletteOpen,
+    loadData, setCommandPaletteOpen,
   } = useStore()
 
   // Auth
@@ -40,11 +39,10 @@ export default function App() {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'p') { e.preventDefault(); setCommandPaletteOpen(true) }
       if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); setCommandPaletteOpen(true) }
-      if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === 'A') { e.preventDefault(); setClaudeOpen(true) }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [setCommandPaletteOpen, setClaudeOpen])
+  }, [setCommandPaletteOpen])
 
   if (authLoading) return <Splash />
   if (!session) return <AuthScreen />
@@ -90,12 +88,6 @@ export default function App() {
                   ⌕ Search
                   <kbd className="ml-2 opacity-50">⌘P</kbd>
                 </button>
-                <button
-                  className={`text-xs px-2 py-1 rounded transition-colors ${claudeOpen ? 'text-accent-purple' : 'text-text-muted hover:text-text-primary hover:bg-bg-hover'}`}
-                  onClick={() => setClaudeOpen(!claudeOpen)}
-                >
-                  ◈ Claude
-                </button>
               </div>
             </div>
 
@@ -111,14 +103,6 @@ export default function App() {
                   {mainView === 'graph' && <GraphView />}
                 </Panel>
 
-                {claudeOpen && (
-                  <>
-                    <PanelResizeHandle className="w-px hover:w-0.5 transition-all" style={{ background: '#2a2a35' }} />
-                    <Panel defaultSize={28} minSize={20} maxSize={45}>
-                      <ClaudePanel />
-                    </Panel>
-                  </>
-                )}
               </PanelGroup>
             </div>
           </div>
