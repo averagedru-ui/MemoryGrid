@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  width: 100%;
+  overflow: hidden;
+  background: #0d0d0f;
+  color: #e8e8f0;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #3a3a48;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #5a5a70;
+}
+
+/* CodeMirror overrides */
+.cm-editor {
+  height: 100%;
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  background: transparent !important;
+}
+
+.cm-editor.cm-focused {
+  outline: none !important;
+}
+
+.cm-scroller {
+  overflow: auto;
+  padding: 2rem 3rem;
+}
+
+.cm-content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.cm-line {
+  color: #e8e8f0;
+}
+
+.cm-gutters {
+  display: none !important;
+}
+
+/* Markdown styling in editor */
+.cm-header-1 { font-size: 1.8em; font-weight: 700; color: #f0f0ff; }
+.cm-header-2 { font-size: 1.4em; font-weight: 600; color: #e0e0f8; }
+.cm-header-3 { font-size: 1.2em; font-weight: 600; color: #d0d0f0; }
+.cm-strong { color: #c8b8ff; font-weight: 600; }
+.cm-em { color: #b8d8ff; font-style: italic; }
+.cm-url { color: #7c6af7; }
+.cm-link { color: #7c6af7; }
+
+/* Wiki link highlighting */
+.cm-wiki-link {
+  color: #7c6af7;
+  background: rgba(124, 106, 247, 0.1);
+  border-radius: 3px;
+  padding: 1px 2px;
+  cursor: pointer;
+}
+.cm-wiki-link:hover {
+  background: rgba(124, 106, 247, 0.2);
+}

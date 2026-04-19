@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="80" fill="#0d0d0f"/>
+  <g fill="none">
+    <!-- Outer glow -->
+    <circle cx="256" cy="256" r="120" fill="rgba(124,106,247,0.08)"/>
+    <!-- Link beams -->
+    <line x1="256" y1="256" x2="160" y2="160" stroke="#7c6af7" stroke-width="2" stroke-opacity="0.4"/>
+    <line x1="256" y1="256" x2="352" y2="160" stroke="#4f9ef7" stroke-width="2" stroke-opacity="0.4"/>
+    <line x1="256" y1="256" x2="352" y2="352" stroke="#7c6af7" stroke-width="2" stroke-opacity="0.4"/>
+    <line x1="256" y1="256" x2="160" y2="352" stroke="#4f9ef7" stroke-width="2" stroke-opacity="0.4"/>
+    <line x1="256" y1="256" x2="256" y2="136" stroke="#7c6af7" stroke-width="1.5" stroke-opacity="0.3"/>
+    <line x1="256" y1="256" x2="376" y2="256" stroke="#4f9ef7" stroke-width="1.5" stroke-opacity="0.3"/>
+    <!-- Satellite nodes -->
+    <circle cx="160" cy="160" r="14" fill="#4f9ef7" opacity="0.9"/>
+    <circle cx="352" cy="160" r="10" fill="#7c6af7" opacity="0.9"/>
+    <circle cx="352" cy="352" r="12" fill="#00d4ff" opacity="0.8"/>
+    <circle cx="160" cy="352" r="9"  fill="#f76af7" opacity="0.8"/>
+    <circle cx="256" cy="136" r="7"  fill="#7c6af7" opacity="0.7"/>
+    <circle cx="376" cy="256" r="8"  fill="#4f9ef7" opacity="0.7"/>
+    <!-- Centre star -->
+    <circle cx="256" cy="256" r="22" fill="#7c6af7"/>
+    <circle cx="256" cy="256" r="14" fill="#a89cff"/>
+    <circle cx="256" cy="256" r="7"  fill="white"/>
+  </g>
+</svg>

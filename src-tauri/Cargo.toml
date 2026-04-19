@@ -1,0 +1,34 @@
+[package]
+name = "memory-grid"
+version = "0.1.0"
+description = "Memory Grid - AI-powered personal knowledge base"
+authors = ["you"]
+license = ""
+repository = ""
+default-run = "memory-grid"
+edition = "2021"
+rust-version = "1.57"
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "1.6", features = [
+  "dialog-all",
+  "fs-all",
+  "path-all",
+  "notification-all",
+  "global-shortcut-all",
+  "shell-open",
+  "system-tray",
+  "window-close",
+  "window-minimize",
+  "window-maximize",
+  "window-show",
+  "window-hide",
+] }
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
