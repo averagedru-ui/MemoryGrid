@@ -185,14 +185,41 @@ function AuthScreen() {
   const [mode, setMode] = useState<'signin' | 'signup'>('signin')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [verifyPrompt, setVerifyPrompt] = useState(false)
 
   const submit = async () => {
     setLoading(true)
     setError('')
-    const fn = mode === 'signin' ? supabase.auth.signInWithPassword : supabase.auth.signUp
-    const { error } = await fn.call(supabase.auth, { email, password })
-    if (error) setError(error.message)
+    if (mode === 'signup') {
+      const { error } = await supabase.auth.signUp({ email, password })
+      if (error) setError(error.message)
+      else setVerifyPrompt(true)
+    } else {
+      const { error } = await supabase.auth.signInWithPassword({ email, password })
+      if (error) setError(error.message)
+    }
     setLoading(false)
+  }
+
+  if (verifyPrompt) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="w-80 p-8 rounded-2xl text-center" style={{ background: '#141416', border: '1px solid #2a2a35' }}>
+          <div className="text-4xl mb-3">✉️</div>
+          <div className="font-semibold text-text-primary mb-2">Check your email</div>
+          <div className="text-sm text-text-muted mb-4">
+            We sent a verification link to <span className="text-text-secondary">{email}</span>.<br />
+            Click it to activate your account, then sign in.
+          </div>
+          <button
+            className="text-sm text-accent-purple hover:underline"
+            onClick={() => { setVerifyPrompt(false); setMode('signin') }}
+          >
+            Back to sign in
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -201,7 +228,7 @@ function AuthScreen() {
         <div className="text-center mb-6">
           <div className="text-4xl text-accent-purple mb-2">✦</div>
           <div className="font-semibold text-text-primary">Memory Grid</div>
-          <div className="text-xs text-text-muted mt-1">Your AI-powered second brain</div>
+          <div className="text-xs text-text-muted mt-1">Your personal knowledge base</div>
         </div>
 
         <div className="space-y-3">
@@ -233,7 +260,7 @@ function AuthScreen() {
 
         <button
           className="w-full mt-3 text-xs text-text-muted hover:text-text-secondary transition-colors"
-          onClick={() => setMode(mode === 'signin' ? 'signup' : 'signin')}
+          onClick={() => { setMode(mode === 'signin' ? 'signup' : 'signin'); setError('') }}
         >
           {mode === 'signin' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
         </button>
