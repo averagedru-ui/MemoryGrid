@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { parseFrontmatter, extractWikiLinks } from '../lib/wikilinks'
+import { parseFrontmatter } from '../lib/wikilinks'
 import { useStore } from '../store/useStore'
 
 interface ImportModalProps {

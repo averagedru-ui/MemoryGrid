@@ -233,7 +233,7 @@ export default function GalaxyView() {
 
     // Hover tooltip
     if (cameraRef.current && sceneRef.current) {
-      raycasterRef.current.setFromCamera(mouseRef.current, cameraRef.current)
+      raycasterRef.current.setFromCamera(new THREE.Vector2(mouseRef.current.x, mouseRef.current.y), cameraRef.current)
       const meshes = [...nodeMapRef.current.values()]
       const hits = raycasterRef.current.intersectObjects(meshes)
       if (hits.length > 0 && tooltipRef.current) {
@@ -257,10 +257,10 @@ export default function GalaxyView() {
     if (!cameraRef.current) return
     const container = containerRef.current!
     const rect = container.getBoundingClientRect()
-    const mouse = {
-      x: ((e.clientX - rect.left) / rect.width) * 2 - 1,
-      y: -((e.clientY - rect.top) / rect.height) * 2 + 1,
-    }
+    const mouse = new THREE.Vector2(
+      ((e.clientX - rect.left) / rect.width) * 2 - 1,
+      -((e.clientY - rect.top) / rect.height) * 2 + 1,
+    )
     raycasterRef.current.setFromCamera(mouse, cameraRef.current)
     const meshes = [...nodeMapRef.current.values()]
     const hits = raycasterRef.current.intersectObjects(meshes)
@@ -313,10 +313,10 @@ export default function GalaxyView() {
       const container = containerRef.current!
       const rect = container.getBoundingClientRect()
       const touch = e.changedTouches[0]
-      const mouse = {
-        x: ((touch.clientX - rect.left) / rect.width) * 2 - 1,
-        y: -((touch.clientY - rect.top) / rect.height) * 2 + 1,
-      }
+      const mouse = new THREE.Vector2(
+        ((touch.clientX - rect.left) / rect.width) * 2 - 1,
+        -((touch.clientY - rect.top) / rect.height) * 2 + 1,
+      )
       raycasterRef.current.setFromCamera(mouse, cameraRef.current)
       const hits = raycasterRef.current.intersectObjects([...nodeMapRef.current.values()])
       if (hits.length > 0) setActiveNote(hits[0].object.userData.noteId as string)

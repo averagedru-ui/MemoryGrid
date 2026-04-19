@@ -3,7 +3,6 @@ import { EditorState } from '@codemirror/state'
 import { EditorView, keymap, placeholder } from '@codemirror/view'
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
 import { markdown, markdownLanguage } from '@codemirror/lang-markdown'
-import { languages } from '@codemirror/language-data'
 import { useStore } from '../store/useStore'
 
 interface EditorProps {
@@ -36,7 +35,7 @@ export default function Editor({ noteId }: EditorProps) {
       extensions: [
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
-        markdown({ base: markdownLanguage, codeLanguages: languages }),
+        markdown({ base: markdownLanguage }),
         placeholder('Start writing…'),
         EditorView.lineWrapping,
         EditorView.updateListener.of((update) => {

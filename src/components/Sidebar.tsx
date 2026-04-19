@@ -9,8 +9,6 @@ export default function Sidebar() {
   } = useStore()
   const [search, setSearch] = useState('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [newFolderName, setNewFolderName] = useState('')
-
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev)
