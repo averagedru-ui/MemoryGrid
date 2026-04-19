@@ -5,16 +5,25 @@ import type { Folder, Note } from '../types'
 export default function Sidebar() {
   const {
     notes, folders, activeNoteId, sidebarView,
-    createNote, createFolder, setActiveNote, setSidebarView, setMainView,
+    createNote, createFolder, setActiveNote, setSidebarView, setMainView, updateNote,
   } = useStore()
   const [search, setSearch] = useState('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
+  const [dragOverFolder, setDragOverFolder] = useState<string | 'root' | null>(null)
+
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
       const next = new Set(prev)
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+  }
+
+  const handleDrop = (folderId: string | null, e: React.DragEvent) => {
+    e.preventDefault()
+    const noteId = e.dataTransfer.getData('noteId')
+    if (noteId) updateNote(noteId, { folder_id: folderId })
+    setDragOverFolder(null)
   }
 
   const filteredNotes = search
@@ -27,7 +36,6 @@ export default function Sidebar() {
 
   const rootNotes = filteredNotes.filter((n) => !n.folder_id)
   const rootFolders = folders.filter((f) => !f.parent_id)
-
   const allTags = [...new Set(notes.flatMap((n) => n.tags))].sort()
 
   return (
@@ -62,7 +70,6 @@ export default function Sidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        {/* Files view */}
         {sidebarView === 'files' && (
           <div className="p-2">
             <div className="flex gap-1 mb-2">
@@ -91,24 +98,38 @@ export default function Sidebar() {
                 notes={notes}
                 activeNoteId={activeNoteId}
                 expanded={expandedFolders.has(folder.id)}
+                isDragOver={dragOverFolder === folder.id}
                 onToggle={toggleFolder}
                 onNoteClick={setActiveNote}
+                onDragOver={(e) => { e.preventDefault(); setDragOverFolder(folder.id) }}
+                onDragLeave={() => setDragOverFolder(null)}
+                onDrop={(e) => handleDrop(folder.id, e)}
               />
             ))}
 
-            {/* Root notes */}
-            {rootNotes.map((note) => (
-              <NoteItem
-                key={note.id}
-                note={note}
-                active={activeNoteId === note.id}
-                onClick={() => setActiveNote(note.id)}
-              />
-            ))}
+            {/* Root drop zone + root notes */}
+            <div
+              className="rounded transition-colors"
+              style={dragOverFolder === 'root' ? { background: 'rgba(124,106,247,0.08)', outline: '1px dashed rgba(124,106,247,0.4)' } : {}}
+              onDragOver={(e) => { e.preventDefault(); setDragOverFolder('root') }}
+              onDragLeave={() => setDragOverFolder(null)}
+              onDrop={(e) => handleDrop(null, e)}
+            >
+              {rootNotes.map((note) => (
+                <NoteItem
+                  key={note.id}
+                  note={note}
+                  active={activeNoteId === note.id}
+                  onClick={() => setActiveNote(note.id)}
+                />
+              ))}
+              {dragOverFolder === 'root' && (
+                <div className="text-xs text-text-muted text-center py-1 opacity-60">Drop to remove from folder</div>
+              )}
+            </div>
           </div>
         )}
 
-        {/* Search view */}
         {sidebarView === 'search' && (
           <div className="p-2">
             <input
@@ -134,17 +155,16 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Tags view */}
         {sidebarView === 'tags' && (
           <div className="p-2">
             {allTags.length === 0 && (
-              <div className="text-xs text-text-muted p-2">No tags yet — add tags in note frontmatter</div>
+              <div className="text-xs text-text-muted p-2">No tags yet</div>
             )}
             {allTags.map((tag) => (
               <button
                 key={tag}
                 className="w-full text-left px-2 py-1 rounded text-sm text-accent-purple hover:bg-bg-hover transition-colors"
-                onClick={() => setSearch(`#${tag}`)}
+                onClick={() => { setSidebarView('search'); setSearch(tag) }}
               >
                 #{tag}
                 <span className="ml-1 text-text-muted text-xs">
@@ -155,7 +175,6 @@ export default function Sidebar() {
           </div>
         )}
 
-        {/* Backlinks view */}
         {sidebarView === 'backlinks' && <BacklinksPanel />}
       </div>
 
@@ -181,18 +200,29 @@ export default function Sidebar() {
 }
 
 function FolderItem({
-  folder, notes, activeNoteId, expanded, onToggle, onNoteClick,
+  folder, notes, activeNoteId, expanded, isDragOver,
+  onToggle, onNoteClick, onDragOver, onDragLeave, onDrop,
 }: {
   folder: Folder
   notes: Note[]
   activeNoteId: string | null
   expanded: boolean
+  isDragOver: boolean
   onToggle: (id: string) => void
   onNoteClick: (id: string) => void
+  onDragOver: (e: React.DragEvent) => void
+  onDragLeave: () => void
+  onDrop: (e: React.DragEvent) => void
 }) {
   const folderNotes = notes.filter((n) => n.folder_id === folder.id)
   return (
-    <div>
+    <div
+      className="rounded transition-colors mb-0.5"
+      style={isDragOver ? { background: 'rgba(124,106,247,0.1)', outline: '1px dashed rgba(124,106,247,0.5)' } : {}}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
       <button
         className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-sm text-text-secondary hover:bg-bg-hover transition-colors"
         onClick={() => onToggle(folder.id)}
@@ -220,8 +250,13 @@ function FolderItem({
 
 function NoteItem({ note, active, onClick }: { note: Note; active: boolean; onClick: () => void }) {
   return (
-    <button
-      className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors truncate ${
+    <div
+      draggable
+      onDragStart={(e) => {
+        e.dataTransfer.setData('noteId', note.id)
+        e.dataTransfer.effectAllowed = 'move'
+      }}
+      className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors cursor-grab active:cursor-grabbing ${
         active
           ? 'bg-bg-hover text-text-primary'
           : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
@@ -230,7 +265,7 @@ function NoteItem({ note, active, onClick }: { note: Note; active: boolean; onCl
     >
       <span className="opacity-40 text-xs flex-shrink-0">✦</span>
       <span className="truncate">{note.title || 'Untitled'}</span>
-    </button>
+    </div>
   )
 }
 

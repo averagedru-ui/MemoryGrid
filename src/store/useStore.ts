@@ -22,7 +22,7 @@ interface AppState {
   // Actions
   loadData: (userId: string) => Promise<void>
   createNote: (title: string, folderId?: string) => Promise<Note>
-  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'tags'>>) => Promise<void>
+  updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folder_id'>>) => Promise<void>
   deleteNote: (id: string) => Promise<void>
   createFolder: (name: string, parentId?: string) => Promise<void>
   setActiveNote: (id: string | null) => void
