@@ -1,6 +1,13 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store/useStore'
 import type { Folder, Note } from '../types'
+
+// ── Context menu ───────────────────────────────────────────────────────────────
+interface CtxMenu {
+  x: number
+  y: number
+  note: Note
+}
 
 export default function Sidebar() {
   const {
@@ -8,9 +15,11 @@ export default function Sidebar() {
     createNote, createFolder, deleteNote, setActiveNote,
     setSidebarView, setMainView, updateNote,
   } = useStore()
+
   const [search, setSearch] = useState('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [dragOverId, setDragOverId] = useState<string | 'root' | null>(null)
+  const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
+  const ctxRef = useRef<HTMLDivElement>(null)
 
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
@@ -20,13 +29,16 @@ export default function Sidebar() {
     })
   }
 
-  const handleDrop = (folderId: string | null, e: React.DragEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-    const noteId = e.dataTransfer.getData('noteId') || e.dataTransfer.getData('text/plain')
-    if (noteId) updateNote(noteId, { folder_id: folderId })
-    setDragOverId(null)
-  }
+  // Close context menu on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ctxRef.current && !ctxRef.current.contains(e.target as Node)) {
+        setCtxMenu(null)
+      }
+    }
+    window.addEventListener('mousedown', handler)
+    return () => window.removeEventListener('mousedown', handler)
+  }, [])
 
   const filteredNotes = search
     ? notes.filter(
@@ -69,12 +81,9 @@ export default function Sidebar() {
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 overflow-y-auto min-h-0 relative">
         {sidebarView === 'files' && (
-          <div
-            className="p-2"
-            onDragOver={(e) => e.preventDefault()}
-          >
+          <div className="p-2">
             <div className="flex gap-1 mb-2">
               <button
                 className="flex-1 text-xs py-1 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
@@ -100,42 +109,21 @@ export default function Sidebar() {
                 notes={notes}
                 activeNoteId={activeNoteId}
                 expanded={expandedFolders.has(folder.id)}
-                isDragOver={dragOverId === folder.id}
                 onToggle={toggleFolder}
                 onNoteClick={setActiveNote}
-                onNoteDelete={deleteNote}
-                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId(folder.id) }}
-                onDragLeave={(e) => { if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
-                onDrop={(e) => handleDrop(folder.id, e)}
+                onNoteContext={(note, x, y) => setCtxMenu({ x, y, note })}
               />
             ))}
 
-            {/* Root drop zone */}
-            <div
-              className="rounded min-h-4 transition-all"
-              style={dragOverId === 'root' ? {
-                background: 'rgba(124,106,247,0.06)',
-                outline: '1px dashed rgba(124,106,247,0.4)',
-              } : {}}
-              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId('root') }}
-              onDragLeave={(e) => { if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
-              onDrop={(e) => handleDrop(null, e)}
-            >
-              {rootNotes.map((note) => (
-                <NoteItem
-                  key={note.id}
-                  note={note}
-                  active={activeNoteId === note.id}
-                  onClick={() => setActiveNote(note.id)}
-                  onDelete={() => {
-                    if (confirm(`Delete "${note.title || 'Untitled'}"?`)) deleteNote(note.id)
-                  }}
-                />
-              ))}
-              {dragOverId === 'root' && rootNotes.length === 0 && (
-                <div className="text-xs text-text-muted text-center py-2 opacity-50">Drop here to remove from folder</div>
-              )}
-            </div>
+            {rootNotes.map((note) => (
+              <NoteItem
+                key={note.id}
+                note={note}
+                active={activeNoteId === note.id}
+                onClick={() => setActiveNote(note.id)}
+                onContext={(x, y) => setCtxMenu({ x, y, note })}
+              />
+            ))}
           </div>
         )}
 
@@ -155,9 +143,7 @@ export default function Sidebar() {
                   note={note}
                   active={activeNoteId === note.id}
                   onClick={() => setActiveNote(note.id)}
-                  onDelete={() => {
-                    if (confirm(`Delete "${note.title || 'Untitled'}"?`)) deleteNote(note.id)
-                  }}
+                  onContext={(x, y) => setCtxMenu({ x, y, note })}
                 />
               ))}
               {search && filteredNotes.length === 0 && (
@@ -188,6 +174,28 @@ export default function Sidebar() {
         )}
 
         {sidebarView === 'backlinks' && <BacklinksPanel />}
+
+        {/* Context menu */}
+        {ctxMenu && (
+          <ContextMenu
+            ref={ctxRef}
+            x={ctxMenu.x}
+            y={ctxMenu.y}
+            note={ctxMenu.note}
+            folders={folders}
+            onMove={(folderId) => {
+              updateNote(ctxMenu.note.id, { folder_id: folderId })
+              setCtxMenu(null)
+            }}
+            onDelete={() => {
+              if (confirm(`Delete "${ctxMenu.note.title || 'Untitled'}"?`)) {
+                deleteNote(ctxMenu.note.id)
+              }
+              setCtxMenu(null)
+            }}
+            onClose={() => setCtxMenu(null)}
+          />
+        )}
       </div>
 
       <div className="flex border-t border-border-subtle flex-shrink-0">
@@ -210,51 +218,110 @@ export default function Sidebar() {
   )
 }
 
+// ── Context menu component ─────────────────────────────────────────────────────
+import { forwardRef } from 'react'
+
+const ContextMenu = forwardRef<HTMLDivElement, {
+  x: number; y: number; note: Note; folders: Folder[]
+  onMove: (folderId: string | null) => void
+  onDelete: () => void
+  onClose: () => void
+}>(({ x, y, note, folders, onMove, onDelete }, ref) => {
+  const [showFolders, setShowFolders] = useState(false)
+
+  return (
+    <div
+      ref={ref}
+      className="fixed z-50 rounded-lg overflow-hidden shadow-xl py-1"
+      style={{
+        left: x, top: y,
+        background: '#1a1a1f',
+        border: '1px solid #3a3a48',
+        minWidth: 160,
+      }}
+    >
+      {/* Move to folder */}
+      <button
+        className="w-full flex items-center justify-between px-3 py-1.5 text-sm text-text-secondary hover:bg-bg-hover hover:text-text-primary transition-colors"
+        onClick={() => setShowFolders(!showFolders)}
+      >
+        <span>Move to folder</span>
+        <span className="opacity-50 text-xs">{showFolders ? '▴' : '▸'}</span>
+      </button>
+
+      {showFolders && (
+        <div className="border-t border-border-subtle">
+          {note.folder_id && (
+            <button
+              className="w-full text-left px-4 py-1.5 text-xs text-text-muted hover:bg-bg-hover hover:text-text-primary transition-colors"
+              onClick={() => onMove(null)}
+            >
+              ✕ Remove from folder
+            </button>
+          )}
+          {folders.map((f) => (
+            <button
+              key={f.id}
+              className={`w-full text-left px-4 py-1.5 text-xs transition-colors hover:bg-bg-hover ${
+                note.folder_id === f.id ? 'text-accent-purple' : 'text-text-secondary hover:text-text-primary'
+              }`}
+              onClick={() => onMove(f.id)}
+            >
+              {note.folder_id === f.id ? '✓ ' : ''}{f.name}
+            </button>
+          ))}
+          {folders.length === 0 && (
+            <div className="px-4 py-1.5 text-xs text-text-muted">No folders yet</div>
+          )}
+        </div>
+      )}
+
+      <div className="border-t border-border-subtle mt-1 pt-1">
+        <button
+          className="w-full text-left px-3 py-1.5 text-sm text-red-400 hover:bg-bg-hover transition-colors"
+          onClick={onDelete}
+        >
+          Delete note
+        </button>
+      </div>
+    </div>
+  )
+})
+ContextMenu.displayName = 'ContextMenu'
+
+// ── Folder item ────────────────────────────────────────────────────────────────
 function FolderItem({
-  folder, notes, activeNoteId, expanded, isDragOver,
-  onToggle, onNoteClick, onNoteDelete, onDragOver, onDragLeave, onDrop,
+  folder, notes, activeNoteId, expanded,
+  onToggle, onNoteClick, onNoteContext,
 }: {
-  folder: Folder
-  notes: Note[]
-  activeNoteId: string | null
+  folder: Folder; notes: Note[]; activeNoteId: string | null
   expanded: boolean
-  isDragOver: boolean
   onToggle: (id: string) => void
   onNoteClick: (id: string) => void
-  onNoteDelete: (id: string) => void
-  onDragOver: (e: React.DragEvent) => void
-  onDragLeave: (e: React.DragEvent) => void
-  onDrop: (e: React.DragEvent) => void
+  onNoteContext: (note: Note, x: number, y: number) => void
 }) {
   const { deleteFolder } = useStore()
   const [hovered, setHovered] = useState(false)
   const folderNotes = notes.filter((n) => n.folder_id === folder.id)
 
   return (
-    <div
-      className="rounded mb-0.5 transition-all"
-      style={isDragOver ? { background: 'rgba(124,106,247,0.08)', outline: '1px dashed rgba(124,106,247,0.5)' } : {}}
-      onDragOver={onDragOver}
-      onDragLeave={onDragLeave}
-      onDrop={onDrop}
-    >
+    <div className="mb-0.5">
       <div
-        className="flex items-center gap-1.5 px-2 py-1 rounded text-sm text-text-secondary hover:bg-bg-hover transition-colors group"
+        className="flex items-center gap-1.5 px-2 py-1 rounded text-sm text-text-secondary hover:bg-bg-hover transition-colors"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <button className="flex items-center gap-1.5 flex-1 min-w-0" onClick={() => onToggle(folder.id)}>
-          <span className="text-xs opacity-60">{expanded ? '▾' : '▸'}</span>
-          <span className="opacity-60 text-xs">⬚</span>
+        <button className="flex items-center gap-1.5 flex-1 min-w-0 text-left" onClick={() => onToggle(folder.id)}>
+          <span className="text-xs opacity-60 flex-shrink-0">{expanded ? '▾' : '▸'}</span>
+          <span className="opacity-60 text-xs flex-shrink-0">⬚</span>
           <span className="truncate">{folder.name}</span>
-          <span className="ml-1 text-xs text-text-muted">{folderNotes.length}</span>
+          <span className="ml-1 text-xs text-text-muted flex-shrink-0">{folderNotes.length}</span>
         </button>
         {hovered && (
           <button
             className="text-text-muted hover:text-red-400 transition-colors text-xs px-1 flex-shrink-0"
-            title="Delete folder"
             onClick={() => {
-              if (confirm(`Delete folder "${folder.name}"? Notes inside will be moved to root.`)) {
+              if (confirm(`Delete folder "${folder.name}"? Notes will move to root.`)) {
                 deleteFolder(folder.id)
               }
             }}
@@ -271,9 +338,7 @@ function FolderItem({
               note={note}
               active={activeNoteId === note.id}
               onClick={() => onNoteClick(note.id)}
-              onDelete={() => {
-                if (confirm(`Delete "${note.title || 'Untitled'}"?`)) onNoteDelete(note.id)
-              }}
+              onContext={(x, y) => onNoteContext(note, x, y)}
             />
           ))}
         </div>
@@ -282,48 +347,31 @@ function FolderItem({
   )
 }
 
-function NoteItem({
-  note, active, onClick, onDelete,
-}: {
-  note: Note
-  active: boolean
+// ── Note item ──────────────────────────────────────────────────────────────────
+function NoteItem({ note, active, onClick, onContext }: {
+  note: Note; active: boolean
   onClick: () => void
-  onDelete: () => void
+  onContext: (x: number, y: number) => void
 }) {
-  const [hovered, setHovered] = useState(false)
-
   return (
     <div
-      draggable
-      onDragStart={(e) => {
-        e.dataTransfer.clearData()
-        e.dataTransfer.setData('text/plain', note.id)
-        e.dataTransfer.setData('noteId', note.id)
-        e.dataTransfer.effectAllowed = 'move'
-      }}
-      className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors select-none ${
+      className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors cursor-pointer group ${
         active ? 'bg-bg-hover text-text-primary' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
       }`}
-      style={{ cursor: hovered ? 'grab' : 'default' }}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
       onClick={onClick}
+      onContextMenu={(e) => {
+        e.preventDefault()
+        onContext(e.clientX, e.clientY)
+      }}
     >
       <span className="opacity-40 text-xs flex-shrink-0">✦</span>
       <span className="truncate flex-1">{note.title || 'Untitled'}</span>
-      {hovered && (
-        <button
-          className="text-text-muted hover:text-red-400 transition-colors text-xs px-1 flex-shrink-0"
-          title="Delete note"
-          onClick={(e) => { e.stopPropagation(); onDelete() }}
-        >
-          ✕
-        </button>
-      )}
+      <span className="opacity-0 group-hover:opacity-40 text-xs flex-shrink-0">⋯</span>
     </div>
   )
 }
 
+// ── Backlinks panel ────────────────────────────────────────────────────────────
 function BacklinksPanel() {
   const { notes, links, activeNoteId, setActiveNote } = useStore()
   if (!activeNoteId) return <div className="text-xs text-text-muted p-3">Open a note to see backlinks</div>
@@ -344,7 +392,7 @@ function BacklinksPanel() {
           note={note}
           active={false}
           onClick={() => setActiveNote(note.id)}
-          onDelete={() => {}}
+          onContext={() => {}}
         />
       ))}
       {backlinks.length === 0 && (
