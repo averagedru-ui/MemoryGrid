@@ -8,6 +8,9 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['icon.svg', 'icon-192.png', 'icon-512.png'],
+      // Bump this version string any time you want to force all clients to
+      // discard their old service-worker cache and re-fetch everything.
+      version: '1.1.0',
       manifest: {
         name: 'Memory Grid',
         short_name: 'Memory Grid',

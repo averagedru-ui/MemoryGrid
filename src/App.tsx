@@ -23,11 +23,16 @@ export default function App() {
 
   // Auth
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setAuthLoading(false)
-      if (session) loadData(session.user.id)
-    })
+    supabase.auth.getSession()
+      .then(({ data: { session } }) => {
+        setSession(session)
+        setAuthLoading(false)
+        if (session) loadData(session.user.id)
+      })
+      .catch(() => {
+        // Network error or bad config — show login screen so user isn't stuck
+        setAuthLoading(false)
+      })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, session) => {
       setSession(session)
       if (session) loadData(session.user.id)
