@@ -23,7 +23,7 @@ export default function Sidebar() {
   const handleDrop = (folderId: string | null, e: React.DragEvent) => {
     e.preventDefault()
     e.stopPropagation()
-    const noteId = e.dataTransfer.getData('noteId')
+    const noteId = e.dataTransfer.getData('noteId') || e.dataTransfer.getData('text/plain')
     if (noteId) updateNote(noteId, { folder_id: folderId })
     setDragOverId(null)
   }
@@ -71,7 +71,10 @@ export default function Sidebar() {
 
       <div className="flex-1 overflow-y-auto min-h-0">
         {sidebarView === 'files' && (
-          <div className="p-2">
+          <div
+            className="p-2"
+            onDragOver={(e) => e.preventDefault()}
+          >
             <div className="flex gap-1 mb-2">
               <button
                 className="flex-1 text-xs py-1 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
@@ -101,8 +104,8 @@ export default function Sidebar() {
                 onToggle={toggleFolder}
                 onNoteClick={setActiveNote}
                 onNoteDelete={deleteNote}
-                onDragOver={(e) => { e.preventDefault(); setDragOverId(folder.id) }}
-                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
+                onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId(folder.id) }}
+                onDragLeave={(e) => { if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
                 onDrop={(e) => handleDrop(folder.id, e)}
               />
             ))}
@@ -114,8 +117,8 @@ export default function Sidebar() {
                 background: 'rgba(124,106,247,0.06)',
                 outline: '1px dashed rgba(124,106,247,0.4)',
               } : {}}
-              onDragOver={(e) => { e.preventDefault(); setDragOverId('root') }}
-              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
+              onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; setDragOverId('root') }}
+              onDragLeave={(e) => { if (!e.relatedTarget || !e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
               onDrop={(e) => handleDrop(null, e)}
             >
               {rootNotes.map((note) => (
@@ -293,6 +296,8 @@ function NoteItem({
     <div
       draggable
       onDragStart={(e) => {
+        e.dataTransfer.clearData()
+        e.dataTransfer.setData('text/plain', note.id)
         e.dataTransfer.setData('noteId', note.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
