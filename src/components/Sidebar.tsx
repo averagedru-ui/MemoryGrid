@@ -5,11 +5,12 @@ import type { Folder, Note } from '../types'
 export default function Sidebar() {
   const {
     notes, folders, activeNoteId, sidebarView,
-    createNote, createFolder, setActiveNote, setSidebarView, setMainView, updateNote,
+    createNote, createFolder, deleteNote, setActiveNote,
+    setSidebarView, setMainView, updateNote,
   } = useStore()
   const [search, setSearch] = useState('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
-  const [dragOverFolder, setDragOverFolder] = useState<string | 'root' | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | 'root' | null>(null)
 
   const toggleFolder = (id: string) => {
     setExpandedFolders((prev) => {
@@ -21,9 +22,10 @@ export default function Sidebar() {
 
   const handleDrop = (folderId: string | null, e: React.DragEvent) => {
     e.preventDefault()
+    e.stopPropagation()
     const noteId = e.dataTransfer.getData('noteId')
     if (noteId) updateNote(noteId, { folder_id: folderId })
-    setDragOverFolder(null)
+    setDragOverId(null)
   }
 
   const filteredNotes = search
@@ -40,13 +42,11 @@ export default function Sidebar() {
 
   return (
     <div className="flex flex-col h-full" style={{ background: '#141416' }}>
-      {/* App title */}
       <div className="px-4 py-3 flex items-center gap-2 border-b border-border-subtle flex-shrink-0">
         <span className="text-accent-purple text-lg">✦</span>
         <span className="font-semibold text-sm text-text-primary">Memory Grid</span>
       </div>
 
-      {/* Nav icons */}
       <div className="flex border-b border-border-subtle flex-shrink-0">
         {([
           { view: 'files', icon: '⬚', label: 'Files' },
@@ -90,7 +90,6 @@ export default function Sidebar() {
               </button>
             </div>
 
-            {/* Folders */}
             {rootFolders.map((folder) => (
               <FolderItem
                 key={folder.id}
@@ -98,21 +97,25 @@ export default function Sidebar() {
                 notes={notes}
                 activeNoteId={activeNoteId}
                 expanded={expandedFolders.has(folder.id)}
-                isDragOver={dragOverFolder === folder.id}
+                isDragOver={dragOverId === folder.id}
                 onToggle={toggleFolder}
                 onNoteClick={setActiveNote}
-                onDragOver={(e) => { e.preventDefault(); setDragOverFolder(folder.id) }}
-                onDragLeave={() => setDragOverFolder(null)}
+                onNoteDelete={deleteNote}
+                onDragOver={(e) => { e.preventDefault(); setDragOverId(folder.id) }}
+                onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
                 onDrop={(e) => handleDrop(folder.id, e)}
               />
             ))}
 
-            {/* Root drop zone + root notes */}
+            {/* Root drop zone */}
             <div
-              className="rounded transition-colors"
-              style={dragOverFolder === 'root' ? { background: 'rgba(124,106,247,0.08)', outline: '1px dashed rgba(124,106,247,0.4)' } : {}}
-              onDragOver={(e) => { e.preventDefault(); setDragOverFolder('root') }}
-              onDragLeave={() => setDragOverFolder(null)}
+              className="rounded min-h-4 transition-all"
+              style={dragOverId === 'root' ? {
+                background: 'rgba(124,106,247,0.06)',
+                outline: '1px dashed rgba(124,106,247,0.4)',
+              } : {}}
+              onDragOver={(e) => { e.preventDefault(); setDragOverId('root') }}
+              onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setDragOverId(null) }}
               onDrop={(e) => handleDrop(null, e)}
             >
               {rootNotes.map((note) => (
@@ -121,10 +124,13 @@ export default function Sidebar() {
                   note={note}
                   active={activeNoteId === note.id}
                   onClick={() => setActiveNote(note.id)}
+                  onDelete={() => {
+                    if (confirm(`Delete "${note.title || 'Untitled'}"?`)) deleteNote(note.id)
+                  }}
                 />
               ))}
-              {dragOverFolder === 'root' && (
-                <div className="text-xs text-text-muted text-center py-1 opacity-60">Drop to remove from folder</div>
+              {dragOverId === 'root' && rootNotes.length === 0 && (
+                <div className="text-xs text-text-muted text-center py-2 opacity-50">Drop here to remove from folder</div>
               )}
             </div>
           </div>
@@ -146,6 +152,9 @@ export default function Sidebar() {
                   note={note}
                   active={activeNoteId === note.id}
                   onClick={() => setActiveNote(note.id)}
+                  onDelete={() => {
+                    if (confirm(`Delete "${note.title || 'Untitled'}"?`)) deleteNote(note.id)
+                  }}
                 />
               ))}
               {search && filteredNotes.length === 0 && (
@@ -178,7 +187,6 @@ export default function Sidebar() {
         {sidebarView === 'backlinks' && <BacklinksPanel />}
       </div>
 
-      {/* Bottom view switcher */}
       <div className="flex border-t border-border-subtle flex-shrink-0">
         {([
           { view: 'editor', icon: '✎', label: 'Editor' },
@@ -201,7 +209,7 @@ export default function Sidebar() {
 
 function FolderItem({
   folder, notes, activeNoteId, expanded, isDragOver,
-  onToggle, onNoteClick, onDragOver, onDragLeave, onDrop,
+  onToggle, onNoteClick, onNoteDelete, onDragOver, onDragLeave, onDrop,
 }: {
   folder: Folder
   notes: Note[]
@@ -210,28 +218,48 @@ function FolderItem({
   isDragOver: boolean
   onToggle: (id: string) => void
   onNoteClick: (id: string) => void
+  onNoteDelete: (id: string) => void
   onDragOver: (e: React.DragEvent) => void
-  onDragLeave: () => void
+  onDragLeave: (e: React.DragEvent) => void
   onDrop: (e: React.DragEvent) => void
 }) {
+  const { deleteFolder } = useStore()
+  const [hovered, setHovered] = useState(false)
   const folderNotes = notes.filter((n) => n.folder_id === folder.id)
+
   return (
     <div
-      className="rounded transition-colors mb-0.5"
-      style={isDragOver ? { background: 'rgba(124,106,247,0.1)', outline: '1px dashed rgba(124,106,247,0.5)' } : {}}
+      className="rounded mb-0.5 transition-all"
+      style={isDragOver ? { background: 'rgba(124,106,247,0.08)', outline: '1px dashed rgba(124,106,247,0.5)' } : {}}
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
     >
-      <button
-        className="w-full flex items-center gap-1.5 px-2 py-1 rounded text-sm text-text-secondary hover:bg-bg-hover transition-colors"
-        onClick={() => onToggle(folder.id)}
+      <div
+        className="flex items-center gap-1.5 px-2 py-1 rounded text-sm text-text-secondary hover:bg-bg-hover transition-colors group"
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
-        <span className="text-xs opacity-60">{expanded ? '▾' : '▸'}</span>
-        <span className="opacity-60 text-xs">⬚</span>
-        <span className="truncate">{folder.name}</span>
-        <span className="ml-auto text-xs text-text-muted">{folderNotes.length}</span>
-      </button>
+        <button className="flex items-center gap-1.5 flex-1 min-w-0" onClick={() => onToggle(folder.id)}>
+          <span className="text-xs opacity-60">{expanded ? '▾' : '▸'}</span>
+          <span className="opacity-60 text-xs">⬚</span>
+          <span className="truncate">{folder.name}</span>
+          <span className="ml-1 text-xs text-text-muted">{folderNotes.length}</span>
+        </button>
+        {hovered && (
+          <button
+            className="text-text-muted hover:text-red-400 transition-colors text-xs px-1 flex-shrink-0"
+            title="Delete folder"
+            onClick={() => {
+              if (confirm(`Delete folder "${folder.name}"? Notes inside will be moved to root.`)) {
+                deleteFolder(folder.id)
+              }
+            }}
+          >
+            ✕
+          </button>
+        )}
+      </div>
       {expanded && (
         <div className="ml-4">
           {folderNotes.map((note) => (
@@ -240,6 +268,9 @@ function FolderItem({
               note={note}
               active={activeNoteId === note.id}
               onClick={() => onNoteClick(note.id)}
+              onDelete={() => {
+                if (confirm(`Delete "${note.title || 'Untitled'}"?`)) onNoteDelete(note.id)
+              }}
             />
           ))}
         </div>
@@ -248,7 +279,16 @@ function FolderItem({
   )
 }
 
-function NoteItem({ note, active, onClick }: { note: Note; active: boolean; onClick: () => void }) {
+function NoteItem({
+  note, active, onClick, onDelete,
+}: {
+  note: Note
+  active: boolean
+  onClick: () => void
+  onDelete: () => void
+}) {
+  const [hovered, setHovered] = useState(false)
+
   return (
     <div
       draggable
@@ -256,15 +296,25 @@ function NoteItem({ note, active, onClick }: { note: Note; active: boolean; onCl
         e.dataTransfer.setData('noteId', note.id)
         e.dataTransfer.effectAllowed = 'move'
       }}
-      className={`w-full flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors cursor-grab active:cursor-grabbing ${
-        active
-          ? 'bg-bg-hover text-text-primary'
-          : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+      className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors select-none ${
+        active ? 'bg-bg-hover text-text-primary' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
       }`}
+      style={{ cursor: hovered ? 'grab' : 'default' }}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       onClick={onClick}
     >
       <span className="opacity-40 text-xs flex-shrink-0">✦</span>
-      <span className="truncate">{note.title || 'Untitled'}</span>
+      <span className="truncate flex-1">{note.title || 'Untitled'}</span>
+      {hovered && (
+        <button
+          className="text-text-muted hover:text-red-400 transition-colors text-xs px-1 flex-shrink-0"
+          title="Delete note"
+          onClick={(e) => { e.stopPropagation(); onDelete() }}
+        >
+          ✕
+        </button>
+      )}
     </div>
   )
 }
@@ -289,6 +339,7 @@ function BacklinksPanel() {
           note={note}
           active={false}
           onClick={() => setActiveNote(note.id)}
+          onDelete={() => {}}
         />
       ))}
       {backlinks.length === 0 && (

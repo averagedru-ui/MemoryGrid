@@ -17,7 +17,7 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'importing' | 'done'>('idle')
   const [parsed, setParsed] = useState<ParsedNote[]>([])
   const [progress, setProgress] = useState(0)
-  const { createNote, createFolder, notes, folders } = useStore()
+  const { createNote, createFolder, updateNote, notes, folders } = useStore()
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter((f) => f.name.endsWith('.md'))
@@ -73,8 +73,10 @@ export default function ImportModal({ onClose }: ImportModalProps) {
       // Skip if already imported
       const exists = notes.some((n) => n.title === note.title)
       if (!exists) {
-        await createNote(note.title)
-        // updateNote called separately after note created — kept simple here
+        const created = await createNote(note.title)
+        if (note.content || note.tags.length) {
+          await updateNote(created.id, { content: note.content, tags: note.tags })
+        }
       }
 
       done++

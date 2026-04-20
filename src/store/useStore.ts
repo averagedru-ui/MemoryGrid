@@ -24,6 +24,7 @@ interface AppState {
   createNote: (title: string, folderId?: string) => Promise<Note>
   updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folder_id'>>) => Promise<void>
   deleteNote: (id: string) => Promise<void>
+  deleteFolder: (id: string) => Promise<void>
   createFolder: (name: string, parentId?: string) => Promise<void>
   setActiveNote: (id: string | null) => void
   setViewMode: (mode: ViewMode) => void
@@ -88,6 +89,16 @@ export const useStore = create<AppState>((set, get) => ({
       activeNoteId: s.activeNoteId === id ? null : s.activeNoteId,
     }))
     get().computeLinks()
+  },
+
+  deleteFolder: async (id) => {
+    await supabase.from('folders').delete().eq('id', id)
+    // Move notes in this folder to root
+    await supabase.from('notes').update({ folder_id: null }).eq('folder_id', id)
+    set((s) => ({
+      folders: s.folders.filter((f) => f.id !== id),
+      notes: s.notes.map((n) => n.folder_id === id ? { ...n, folder_id: null } : n),
+    }))
   },
 
   createFolder: async (name, parentId) => {
