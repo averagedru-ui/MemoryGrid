@@ -17,7 +17,7 @@ export default function ImportModal({ onClose }: ImportModalProps) {
   const [status, setStatus] = useState<'idle' | 'parsing' | 'importing' | 'done'>('idle')
   const [parsed, setParsed] = useState<ParsedNote[]>([])
   const [progress, setProgress] = useState(0)
-  const { createNote, createFolder, updateNote, notes, folders } = useStore()
+  const { createFolder, bulkImportNotes, folders } = useStore()
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files ?? []).filter((f) => f.name.endsWith('.md'))
@@ -35,13 +35,13 @@ export default function ImportModal({ onClose }: ImportModalProps) {
         ? rawTags.split(',').map((t) => t.trim()).filter(Boolean)
         : []
 
-      // Derive folder path from file.webkitRelativePath
+      // Derive folder path from file.webkitRelativePath (skip vault root + filename)
       const parts = (file as File & { webkitRelativePath: string }).webkitRelativePath.split('/')
-      const folderPath = parts.slice(1, -1) // skip vault root and filename
+      const folderPath = parts.slice(1, -1)
 
       result.push({
         title: file.name.replace(/\.md$/, ''),
-        content: body,
+        content: body.trim(),
         tags,
         folderPath,
       })
@@ -52,36 +52,46 @@ export default function ImportModal({ onClose }: ImportModalProps) {
 
   const doImport = async () => {
     setStatus('importing')
+    setProgress(5)
+
+    // ── Step 1: ensure all folders exist and collect their IDs ────────────────
+    // folderCache key: "parentId/segName" → folder UUID
     const folderCache = new Map<string, string>()
+    for (const f of folders) folderCache.set(`root/${f.name}`, f.id)
 
-    // Pre-build folder map from existing
-    for (const f of folders) folderCache.set(f.name, f.id)
+    const uniquePaths = [
+      ...new Set(parsed.flatMap((n) => n.folderPath.map((_, i) => n.folderPath.slice(0, i + 1).join('/'))))
+    ].sort((a, b) => a.split('/').length - b.split('/').length) // shallow first
 
-    let done = 0
-    for (const note of parsed) {
-      // Create folder hierarchy
-      let parentId: string | undefined
-      for (const seg of note.folderPath) {
-        const key = `${parentId ?? 'root'}/${seg}`
-        if (!folderCache.has(key)) {
-          await createFolder(seg, parentId)
-          // Refresh store and update cache — simplified: just track by segment
-          folderCache.set(key, seg) // placeholder; real id from store
-        }
+    for (const path of uniquePaths) {
+      const segs = path.split('/')
+      const seg = segs[segs.length - 1]
+      const parentSeg = segs.slice(0, -1).join('/')
+      const parentId = parentSeg ? folderCache.get(parentSeg) : undefined
+      const cacheKey = parentSeg ? `${parentSeg}/${seg}` : `root/${seg}`
+
+      if (!folderCache.has(cacheKey)) {
+        const newId = await createFolder(seg, parentId)
+        folderCache.set(cacheKey, newId)
       }
-
-      // Skip if already imported
-      const exists = notes.some((n) => n.title === note.title)
-      if (!exists) {
-        const created = await createNote(note.title)
-        if (note.content || note.tags.length) {
-          await updateNote(created.id, { content: note.content, tags: note.tags })
-        }
-      }
-
-      done++
-      setProgress(Math.round((done / parsed.length) * 100))
     }
+    setProgress(20)
+
+    // ── Step 2: map each parsed note to its folder_id ────────────────────────
+    const items = parsed.map((note) => {
+      let folder_id: string | null = null
+      if (note.folderPath.length > 0) {
+        const cacheKey = note.folderPath.length === 1
+          ? `root/${note.folderPath[0]}`
+          : note.folderPath.join('/')
+        folder_id = folderCache.get(cacheKey) ?? null
+      }
+      return { title: note.title, content: note.content, tags: note.tags, folder_id }
+    })
+
+    // ── Step 3: batch insert all notes with content in one go ────────────────
+    await bulkImportNotes(items)
+    setProgress(100)
     setStatus('done')
   }
 
@@ -102,7 +112,7 @@ export default function ImportModal({ onClose }: ImportModalProps) {
         {status === 'idle' && parsed.length === 0 && (
           <div>
             <p className="text-sm text-text-secondary mb-4">
-              Select your Obsidian vault folder. All <code className="text-accent-purple">.md</code> files will be imported with their folder structure, tags, and wiki-links preserved.
+              Select your Obsidian vault folder. All <code className="text-accent-purple">.md</code> files will be imported with their folder structure, tags, and content preserved.
             </p>
             <label
               className="flex flex-col items-center justify-center w-full h-32 rounded-lg cursor-pointer transition-colors"
@@ -135,14 +145,16 @@ export default function ImportModal({ onClose }: ImportModalProps) {
               <div className="text-sm text-text-primary font-medium">{parsed.length} notes found</div>
               <div className="text-xs text-text-muted mt-1">
                 {[...new Set(parsed.flatMap((n) => n.tags))].length} unique tags •{' '}
-                {[...new Set(parsed.flatMap((n) => n.folderPath[0]).filter(Boolean))].length} folders
+                {[...new Set(parsed.flatMap((n) => n.folderPath[0]).filter(Boolean))].length} top-level folders
               </div>
             </div>
             <div className="max-h-40 overflow-y-auto mb-4 space-y-0.5">
               {parsed.slice(0, 20).map((n) => (
                 <div key={n.title} className="text-xs text-text-muted flex items-center gap-2 px-1">
                   <span className="text-accent-purple opacity-60">✦</span>
-                  <span className="truncate">{n.folderPath.join('/')+' / '}{n.title}</span>
+                  <span className="truncate">
+                    {n.folderPath.length > 0 ? n.folderPath.join('/') + ' / ' : ''}{n.title}
+                  </span>
                 </div>
               ))}
               {parsed.length > 20 && (

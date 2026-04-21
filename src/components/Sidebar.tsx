@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, forwardRef } from 'react'
 import { useStore } from '../store/useStore'
 import type { Folder, Note } from '../types'
 
@@ -12,13 +12,14 @@ interface CtxMenu {
 export default function Sidebar() {
   const {
     notes, folders, activeNoteId, sidebarView,
-    createNote, createFolder, deleteNote, setActiveNote,
+    createNote, createFolder, deleteNote, deleteNotes, setActiveNote,
     setSidebarView, setMainView, updateNote,
   } = useStore()
 
   const [search, setSearch] = useState('')
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set())
   const [ctxMenu, setCtxMenu] = useState<CtxMenu | null>(null)
+  const [selected, setSelected] = useState<Set<string>>(new Set())
   const ctxRef = useRef<HTMLDivElement>(null)
 
   const toggleFolder = (id: string) => {
@@ -27,6 +28,23 @@ export default function Sidebar() {
       next.has(id) ? next.delete(id) : next.add(id)
       return next
     })
+  }
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  const clearSelection = () => setSelected(new Set())
+
+  const handleBulkDelete = async () => {
+    const count = selected.size
+    if (!confirm(`Delete ${count} note${count !== 1 ? 's' : ''}? This cannot be undone.`)) return
+    await deleteNotes([...selected])
+    clearSelection()
   }
 
   // Close context menu on outside click
@@ -83,7 +101,7 @@ export default function Sidebar() {
 
       <div className="flex-1 overflow-y-auto min-h-0 relative">
         {sidebarView === 'files' && (
-          <div className="p-2">
+          <div className="p-2 pb-0">
             <div className="flex gap-1 mb-2">
               <button
                 className="flex-1 text-xs py-1 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
@@ -108,9 +126,11 @@ export default function Sidebar() {
                 folder={folder}
                 notes={notes}
                 activeNoteId={activeNoteId}
+                selected={selected}
                 expanded={expandedFolders.has(folder.id)}
                 onToggle={toggleFolder}
                 onNoteClick={setActiveNote}
+                onNoteSelect={toggleSelect}
                 onNoteContext={(note, x, y) => setCtxMenu({ x, y, note })}
               />
             ))}
@@ -120,10 +140,34 @@ export default function Sidebar() {
                 key={note.id}
                 note={note}
                 active={activeNoteId === note.id}
+                selected={selected.has(note.id)}
                 onClick={() => setActiveNote(note.id)}
+                onSelect={() => toggleSelect(note.id)}
                 onContext={(x, y) => setCtxMenu({ x, y, note })}
               />
             ))}
+
+            {/* Bulk-delete bar — sticks to bottom of notes list */}
+            {selected.size > 0 && (
+              <div
+                className="sticky bottom-0 mt-2 -mx-2 px-3 py-2 flex items-center gap-2"
+                style={{ background: 'rgba(20,20,22,0.96)', borderTop: '1px solid #2a2a35' }}
+              >
+                <span className="text-xs text-text-muted flex-1">{selected.size} selected</span>
+                <button
+                  className="text-xs px-2 py-0.5 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+                  onClick={clearSelection}
+                >
+                  Clear
+                </button>
+                <button
+                  className="text-xs px-2 py-0.5 rounded text-red-400 hover:bg-bg-hover transition-colors"
+                  onClick={handleBulkDelete}
+                >
+                  Delete {selected.size}
+                </button>
+              </div>
+            )}
           </div>
         )}
 
@@ -142,7 +186,9 @@ export default function Sidebar() {
                   key={note.id}
                   note={note}
                   active={activeNoteId === note.id}
+                  selected={selected.has(note.id)}
                   onClick={() => setActiveNote(note.id)}
+                  onSelect={() => toggleSelect(note.id)}
                   onContext={(x, y) => setCtxMenu({ x, y, note })}
                 />
               ))}
@@ -219,8 +265,6 @@ export default function Sidebar() {
 }
 
 // ── Context menu component ─────────────────────────────────────────────────────
-import { forwardRef } from 'react'
-
 const ContextMenu = forwardRef<HTMLDivElement, {
   x: number; y: number; note: Note; folders: Folder[]
   onMove: (folderId: string | null) => void
@@ -291,13 +335,15 @@ ContextMenu.displayName = 'ContextMenu'
 
 // ── Folder item ────────────────────────────────────────────────────────────────
 function FolderItem({
-  folder, notes, activeNoteId, expanded,
-  onToggle, onNoteClick, onNoteContext,
+  folder, notes, activeNoteId, selected, expanded,
+  onToggle, onNoteClick, onNoteSelect, onNoteContext,
 }: {
   folder: Folder; notes: Note[]; activeNoteId: string | null
+  selected: Set<string>
   expanded: boolean
   onToggle: (id: string) => void
   onNoteClick: (id: string) => void
+  onNoteSelect: (id: string) => void
   onNoteContext: (note: Note, x: number, y: number) => void
 }) {
   const { deleteFolder } = useStore()
@@ -337,7 +383,9 @@ function FolderItem({
               key={note.id}
               note={note}
               active={activeNoteId === note.id}
+              selected={selected.has(note.id)}
               onClick={() => onNoteClick(note.id)}
+              onSelect={() => onNoteSelect(note.id)}
               onContext={(x, y) => onNoteContext(note, x, y)}
             />
           ))}
@@ -348,25 +396,44 @@ function FolderItem({
 }
 
 // ── Note item ──────────────────────────────────────────────────────────────────
-function NoteItem({ note, active, onClick, onContext }: {
-  note: Note; active: boolean
+function NoteItem({ note, active, selected, onClick, onSelect, onContext }: {
+  note: Note; active: boolean; selected: boolean
   onClick: () => void
+  onSelect: () => void
   onContext: (x: number, y: number) => void
 }) {
   return (
     <div
-      className={`flex items-center gap-2 px-2 py-1 rounded text-sm transition-colors cursor-pointer group ${
-        active ? 'bg-bg-hover text-text-primary' : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
+      className={`flex items-center gap-1.5 px-2 py-1 rounded text-sm transition-colors cursor-pointer group ${
+        active
+          ? 'bg-bg-hover text-text-primary'
+          : 'text-text-secondary hover:bg-bg-hover hover:text-text-primary'
       }`}
+      style={selected ? {
+        background: 'rgba(124,106,247,0.12)',
+        outline: '1px solid rgba(124,106,247,0.25)',
+        outlineOffset: '-1px',
+      } : {}}
       onClick={onClick}
       onContextMenu={(e) => {
         e.preventDefault()
         onContext(e.clientX, e.clientY)
       }}
     >
-      <span className="opacity-40 text-xs flex-shrink-0">✦</span>
+      {/* Checkbox — visible on hover or when selected */}
+      <button
+        className={`flex-shrink-0 w-3.5 h-3.5 flex items-center justify-center text-xs rounded-sm transition-all leading-none ${
+          selected
+            ? 'text-accent-purple opacity-100'
+            : 'opacity-0 group-hover:opacity-40 text-text-muted'
+        }`}
+        onClick={(e) => { e.stopPropagation(); onSelect() }}
+        title="Select"
+      >
+        {selected ? '✓' : '○'}
+      </button>
       <span className="truncate flex-1">{note.title || 'Untitled'}</span>
-      <span className="opacity-0 group-hover:opacity-40 text-xs flex-shrink-0">⋯</span>
+      <span className="opacity-0 group-hover:opacity-30 text-xs flex-shrink-0 select-none">⋯</span>
     </div>
   )
 }
@@ -391,7 +458,9 @@ function BacklinksPanel() {
           key={note.id}
           note={note}
           active={false}
+          selected={false}
           onClick={() => setActiveNote(note.id)}
+          onSelect={() => {}}
           onContext={() => {}}
         />
       ))}

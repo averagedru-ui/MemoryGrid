@@ -24,8 +24,10 @@ interface AppState {
   createNote: (title: string, folderId?: string) => Promise<Note>
   updateNote: (id: string, updates: Partial<Pick<Note, 'title' | 'content' | 'tags' | 'folder_id'>>) => Promise<void>
   deleteNote: (id: string) => Promise<void>
+  deleteNotes: (ids: string[]) => Promise<void>
   deleteFolder: (id: string) => Promise<void>
-  createFolder: (name: string, parentId?: string) => Promise<void>
+  createFolder: (name: string, parentId?: string) => Promise<string>
+  bulkImportNotes: (items: Array<{ title: string; content: string; tags: string[]; folder_id: string | null }>) => Promise<void>
   setActiveNote: (id: string | null) => void
   setViewMode: (mode: ViewMode) => void
   setSidebarView: (view: SidebarView) => void
@@ -91,6 +93,15 @@ export const useStore = create<AppState>((set, get) => ({
     get().computeLinks()
   },
 
+  deleteNotes: async (ids) => {
+    await supabase.from('notes').delete().in('id', ids)
+    set((s) => ({
+      notes: s.notes.filter((n) => !ids.includes(n.id)),
+      activeNoteId: ids.includes(s.activeNoteId ?? '') ? null : s.activeNoteId,
+    }))
+    get().computeLinks()
+  },
+
   deleteFolder: async (id) => {
     await supabase.from('folders').delete().eq('id', id)
     // Move notes in this folder to root
@@ -103,7 +114,7 @@ export const useStore = create<AppState>((set, get) => ({
 
   createFolder: async (name, parentId) => {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) return
+    if (!user) return ''
     const { data, error } = await supabase
       .from('folders')
       .insert({ name, parent_id: parentId ?? null, user_id: user.id })
@@ -111,6 +122,32 @@ export const useStore = create<AppState>((set, get) => ({
       .single()
     if (error) throw error
     set((s) => ({ folders: [...s.folders, data] }))
+    return data.id as string
+  },
+
+  bulkImportNotes: async (items) => {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) throw new Error('Not authenticated')
+    const existingTitles = new Set(get().notes.map((n) => n.title))
+    const newItems = items.filter((item) => !existingTitles.has(item.title))
+    if (!newItems.length) return
+    // Insert in chunks of 50 to stay well within Supabase request limits
+    const CHUNK = 50
+    const allInserted: Note[] = []
+    for (let i = 0; i < newItems.length; i += CHUNK) {
+      const rows = newItems.slice(i, i + CHUNK).map((item) => ({
+        title: item.title,
+        content: item.content,
+        tags: item.tags,
+        folder_id: item.folder_id,
+        user_id: user.id,
+      }))
+      const { data, error } = await supabase.from('notes').insert(rows).select()
+      if (error) throw error
+      allInserted.push(...(data ?? []))
+    }
+    set((s) => ({ notes: [...allInserted, ...s.notes] }))
+    get().computeLinks()
   },
 
   setActiveNote: (id) => set({ activeNoteId: id, mainView: 'editor' }),

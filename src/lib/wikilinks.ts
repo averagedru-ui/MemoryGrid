@@ -25,8 +25,10 @@ export function parseFrontmatter(raw: string): {
   body: string
   data: Record<string, unknown>
 } {
-  const match = raw.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
-  if (!match) return { body: raw, data: {} }
+  // Normalize Windows/old-Mac line endings so the regex works on any OS
+  const src = raw.replace(/\r\n/g, '\n').replace(/\r/g, '\n')
+  const match = src.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/)
+  if (!match) return { body: src, data: {} }
   const data: Record<string, unknown> = {}
   for (const line of match[1].split('\n')) {
     const [key, ...rest] = line.split(':')
