@@ -11,15 +11,38 @@ import ImportModal from './components/ImportModal'
 import ErrorBoundary from './components/ErrorBoundary'
 import type { Session } from '@supabase/supabase-js'
 
+// ── Mobile detection ───────────────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768)
+  useEffect(() => {
+    const handler = () => setIsMobile(window.innerWidth < 768)
+    window.addEventListener('resize', handler)
+    return () => window.removeEventListener('resize', handler)
+  }, [])
+  return isMobile
+}
+
 export default function App() {
   const [session, setSession] = useState<Session | null>(null)
   const [authLoading, setAuthLoading] = useState(true)
   const [showImport, setShowImport] = useState(false)
 
+  const isMobile = useIsMobile()
+
   const {
     activeNoteId, mainView, sidebarOpen, commandPaletteOpen,
-    loadData, setCommandPaletteOpen,
+    loadData, setCommandPaletteOpen, setSidebarOpen,
   } = useStore()
+
+  // On mobile: start with sidebar closed; on desktop: start open
+  useEffect(() => {
+    setSidebarOpen(!isMobile)
+  }, [isMobile, setSidebarOpen])
+
+  // On mobile: auto-close the drawer when a note is opened
+  useEffect(() => {
+    if (isMobile && activeNoteId) setSidebarOpen(false)
+  }, [activeNoteId, isMobile, setSidebarOpen])
 
   // Auth
   useEffect(() => {
@@ -30,7 +53,6 @@ export default function App() {
         if (session) loadData(session.user.id)
       })
       .catch(() => {
-        // Network error or bad config — show login screen so user isn't stuck
         setAuthLoading(false)
       })
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_ev, session) => {
@@ -53,61 +75,115 @@ export default function App() {
   if (authLoading) return <Splash />
   if (!session) return <AuthScreen />
 
+  // ── Shared sidebar contents ──────────────────────────────────────────────────
+  const sidebarContents = (
+    <div className="h-full flex flex-col">
+      <div className="px-2 pt-2 flex-shrink-0">
+        <button
+          className="w-full text-xs py-1.5 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
+          onClick={() => { setShowImport(true); if (isMobile) setSidebarOpen(false) }}
+        >
+          ↓ Import Obsidian Vault
+        </button>
+      </div>
+      <Sidebar />
+    </div>
+  )
+
+  // ── Shared main content ──────────────────────────────────────────────────────
+  const mainContent = (
+    <div className="h-full flex flex-col">
+      {/* Toolbar */}
+      <div
+        className="flex items-center gap-2 px-3 h-11 flex-shrink-0 border-b border-border-subtle"
+        style={{ background: '#141416' }}
+      >
+        {/* Sidebar toggle — always visible so user can open/close */}
+        <button
+          className="text-text-muted hover:text-text-primary transition-colors text-base leading-none px-1 flex-shrink-0"
+          style={{ fontSize: 18 }}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          title="Toggle sidebar"
+        >
+          ☰
+        </button>
+
+        <ViewToggle />
+
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
+            onClick={() => setCommandPaletteOpen(true)}
+          >
+            ⌕ Search
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 min-h-0 overflow-hidden">
+        {mainView === 'editor' && (
+          activeNoteId
+            ? <div className="h-full overflow-auto"><Editor noteId={activeNoteId} /></div>
+            : <EmptyState />
+        )}
+        {mainView === 'galaxy' && <GalaxyView />}
+        {mainView === 'graph' && <GraphView />}
+      </div>
+    </div>
+  )
+
   return (
     <ErrorBoundary>
       <div className="flex w-full overflow-hidden" style={{ background: '#0d0d0f', height: '100dvh' }}>
-        <PanelGroup direction="horizontal" style={{ height: '100%' }}>
-          {/* Sidebar */}
-          {sidebarOpen && (
-            <>
-              <Panel defaultSize={18} minSize={12} maxSize={30}>
-                <div className="h-full flex flex-col">
-                  <div className="px-2 pt-2 flex-shrink-0">
-                    <button
-                      className="w-full text-xs py-1.5 rounded transition-colors text-text-muted hover:text-text-primary hover:bg-bg-hover"
-                      onClick={() => setShowImport(true)}
-                    >
-                      ↓ Import Obsidian Vault
-                    </button>
-                  </div>
-                  <Sidebar />
-                </div>
-              </Panel>
-              <PanelResizeHandle className="w-px hover:w-0.5 transition-all" style={{ background: '#2a2a35' }} />
-            </>
-          )}
 
-          {/* Main content */}
-          <Panel>
-            <div className="h-full flex flex-col">
-              {/* Toolbar */}
+        {isMobile ? (
+          // ── Mobile: full-screen editor + slide-in drawer ─────────────────────
+          <>
+            {/* Backdrop — tap to close */}
+            {sidebarOpen && (
               <div
-                className="flex items-center gap-2 px-4 h-10 flex-shrink-0 border-b border-border-subtle"
-                style={{ background: '#141416' }}
-              >
-                <ViewToggle />
-                <div className="ml-auto flex items-center gap-2">
-                  <button
-                    className="text-xs px-2 py-1 rounded text-text-muted hover:text-text-primary hover:bg-bg-hover transition-colors"
-                    onClick={() => setCommandPaletteOpen(true)}
-                  >
-                    ⌕ Search
-                  </button>
-                </div>
-              </div>
+                className="fixed inset-0 z-30"
+                style={{ background: 'rgba(0,0,0,0.55)' }}
+                onClick={() => setSidebarOpen(false)}
+              />
+            )}
 
-              <div className="flex-1 min-h-0 overflow-hidden">
-                {mainView === 'editor' && (
-                  activeNoteId
-                    ? <div className="h-full overflow-auto"><Editor noteId={activeNoteId} /></div>
-                    : <EmptyState />
-                )}
-                {mainView === 'galaxy' && <GalaxyView />}
-                {mainView === 'graph' && <GraphView />}
-              </div>
+            {/* Drawer */}
+            <div
+              className="fixed top-0 bottom-0 left-0 z-40 flex flex-col"
+              style={{
+                width: '82vw',
+                maxWidth: 340,
+                transform: sidebarOpen ? 'translateX(0)' : 'translateX(-100%)',
+                transition: 'transform 0.25s cubic-bezier(0.4,0,0.2,1)',
+                background: '#141416',
+                borderRight: '1px solid #2a2a35',
+              }}
+            >
+              {sidebarContents}
             </div>
-          </Panel>
-        </PanelGroup>
+
+            {/* Main — always full width on mobile */}
+            <div className="w-full h-full">
+              {mainContent}
+            </div>
+          </>
+        ) : (
+          // ── Desktop: resizable split panels ──────────────────────────────────
+          <PanelGroup direction="horizontal" style={{ height: '100%' }}>
+            {sidebarOpen && (
+              <>
+                <Panel defaultSize={18} minSize={12} maxSize={30}>
+                  {sidebarContents}
+                </Panel>
+                <PanelResizeHandle className="w-px hover:w-0.5 transition-all" style={{ background: '#2a2a35' }} />
+              </>
+            )}
+            <Panel>
+              {mainContent}
+            </Panel>
+          </PanelGroup>
+        )}
 
         {commandPaletteOpen && <CommandPalette />}
         {showImport && <ImportModal onClose={() => setShowImport(false)} />}
@@ -116,6 +192,7 @@ export default function App() {
   )
 }
 
+// ── View toggle ────────────────────────────────────────────────────────────────
 function ViewToggle() {
   const { mainView, setMainView } = useStore()
   const views = [
@@ -141,6 +218,7 @@ function ViewToggle() {
   )
 }
 
+// ── Empty state ────────────────────────────────────────────────────────────────
 function EmptyState() {
   const { createNote, setCommandPaletteOpen } = useStore()
   return (
@@ -169,6 +247,7 @@ function EmptyState() {
   )
 }
 
+// ── Splash ─────────────────────────────────────────────────────────────────────
 function Splash() {
   return (
     <div className="flex h-full items-center justify-center">
@@ -180,6 +259,7 @@ function Splash() {
   )
 }
 
+// ── Auth screen ────────────────────────────────────────────────────────────────
 function AuthScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
